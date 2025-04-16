@@ -1,0 +1,4 @@
+aiogram
+notion-client
+aiofiles
+python-dotenv
