@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from books import clean_code
+from samples import clean_code
 from filing import CatalogEntry
 from notion_catalog import NotionCatalog
 

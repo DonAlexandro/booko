@@ -16,8 +16,8 @@ from settings import MissingSetting, load_settings
 DOWNLOADS_PATH = Path.home() / "Downloads"
 
 
-def list_download_files():
-    return sorted(p for p in DOWNLOADS_PATH.iterdir()
+def list_download_files(downloads):
+    return sorted(p for p in downloads.iterdir()
                   if p.is_file() and not p.name.startswith("."))
 
 
@@ -53,14 +53,8 @@ def ask_book_details():
     return BookDetails(title, author, genre, technologies, pages)
 
 
-def main():
-    try:
-        settings = load_settings()
-    except MissingSetting as e:
-        print(f"⚠️ {e}")
-        return
-
-    files = list_download_files()
+def file_from_downloads(downloads, library, catalog):
+    files = list_download_files(downloads)
     if not files:
         print("No files found in Downloads.")
         return
@@ -70,9 +64,8 @@ def main():
     book_file = DownloadedBookFile(choose("Select file number: ", files))
     details = ask_book_details()
 
-    catalog = NotionCatalog.connect(settings.notion_token, settings.notion_database_id)
     try:
-        location = file_book(book_file, details, settings.library, catalog)
+        location = file_book(book_file, details, library, catalog)
     except BookAlreadyOnShelf as e:
         print(f"⚠️ {e.location} already exists; nothing was changed.")
         return
@@ -80,6 +73,16 @@ def main():
         print(f"⚠️ Could not file the book ({e}); it is still in Downloads.")
         return
     print(f"✅ Book moved from Downloads to {location} and added to Notion.")
+
+
+def main():
+    try:
+        settings = load_settings()
+    except MissingSetting as e:
+        print(f"⚠️ {e}")
+        return
+    catalog = NotionCatalog.connect(settings.notion_token, settings.notion_database_id)
+    file_from_downloads(DOWNLOADS_PATH, settings.library, catalog)
 
 
 if __name__ == "__main__":

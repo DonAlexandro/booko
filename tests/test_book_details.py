@@ -1,6 +1,6 @@
 import pytest
 
-from books import clean_code
+from samples import clean_code
 from filing import (
     Genre,
     InvalidBookDetails,

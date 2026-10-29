@@ -1,6 +1,6 @@
 import pytest
 
-from books import clean_code
+from samples import RecordingCatalog, UnavailableCatalog, clean_code
 from filing import (
     BookAlreadyOnShelf,
     CatalogEntry,
@@ -13,18 +13,6 @@ from filing import (
 
 DETAILS = clean_code()
 
-
-class RecordingCatalog:
-    def __init__(self):
-        self.entries = []
-
-    def add(self, entry):
-        self.entries.append(entry)
-
-
-class UnavailableCatalog:
-    def add(self, entry):
-        raise ConnectionError("Notion is down")
 
 
 @pytest.fixture
