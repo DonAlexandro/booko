@@ -33,7 +33,7 @@ def choose(prompt, options):
     def parse(text):
         text = text.strip()
         if not (text.isdigit() and 1 <= int(text) <= len(options)):
-            raise ValueError(text)
+            raise ValueError
         return options[int(text) - 1]
 
     return ask(prompt, parse, "Invalid selection.")
