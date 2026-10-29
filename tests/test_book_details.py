@@ -1,7 +1,7 @@
 import pytest
 
+from books import clean_code
 from filing import (
-    BookDetails,
     Genre,
     InvalidBookDetails,
     parse_genre,
@@ -10,16 +10,6 @@ from filing import (
     parse_text,
 )
 
-
-def make_details(**overrides):
-    fields = {
-        "title": "Clean Code",
-        "author": "Robert C. Martin",
-        "genre": Genre.TECHNICAL,
-        "technologies": ("Python", "AI"),
-        "page_count": 464,
-    }
-    return BookDetails(**(fields | overrides))
 
 
 class TestParseText:
@@ -70,7 +60,7 @@ class TestParsePageCount:
 
 class TestBookDetails:
     def test_holds_valid_details(self):
-        details = make_details()
+        details = clean_code()
         assert details.technologies == ("Python", "AI")
         assert details.page_count == 464
 
@@ -86,4 +76,4 @@ class TestBookDetails:
     ])
     def test_refuses_invalid_details(self, overrides):
         with pytest.raises(InvalidBookDetails):
-            make_details(**overrides)
+            clean_code(**overrides)

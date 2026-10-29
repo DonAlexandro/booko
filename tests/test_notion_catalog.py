@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from filing import BookDetails, CatalogEntry, Genre
+from books import clean_code
+from filing import CatalogEntry
 from notion_catalog import NotionCatalog
 
 
@@ -20,13 +21,7 @@ class FakeNotionClient:
 def test_adds_one_notion_page_per_catalog_entry():
     client = FakeNotionClient()
     entry = CatalogEntry(
-        BookDetails(
-            title="Clean Code",
-            author="Robert C. Martin",
-            genre=Genre.TECHNICAL,
-            technologies=("Python", "AI"),
-            page_count=464,
-        ),
+        clean_code(),
         Path("/Library/Python/book.pdf"),
     )
 

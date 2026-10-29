@@ -1,24 +1,17 @@
 import pytest
 
+from books import clean_code
 from filing import (
     BookAlreadyOnShelf,
-    BookDetails,
     CatalogEntry,
     DownloadedBookFile,
-    Genre,
     InvalidBookFileName,
     ReceivedBookFile,
     file_book,
     parse_book_file_name,
 )
 
-DETAILS = BookDetails(
-    title="Clean Code",
-    author="Robert C. Martin",
-    genre=Genre.TECHNICAL,
-    technologies=("Python", "AI"),
-    page_count=464,
-)
+DETAILS = clean_code()
 
 
 class RecordingCatalog:
