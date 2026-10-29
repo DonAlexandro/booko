@@ -9,6 +9,7 @@ from filing import (
     InvalidBookFileName,
     ReceivedBookFile,
     file_book,
+    parse_book_file_name,
 )
 
 DETAILS = BookDetails(
@@ -128,3 +129,13 @@ class TestNameClashOnTheShelf:
 
         assert (library / "Python" / "book.pdf").read_bytes() == b"pages"
         assert len(catalog.entries) == 1
+
+
+class TestParseBookFileName:
+    def test_accepts_a_plain_file_name(self):
+        assert parse_book_file_name("Clean Code.pdf") == "Clean Code.pdf"
+
+    @pytest.mark.parametrize("name", [None, "", ".", "..", "../book.pdf", "nested/book.pdf"])
+    def test_refuses_anything_else(self, name):
+        with pytest.raises(InvalidBookFileName):
+            parse_book_file_name(name)

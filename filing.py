@@ -133,10 +133,14 @@ class ReceivedBookFile:
         location.unlink()
 
 
+def parse_book_file_name(name: str | None) -> str:
+    if not name or name in (".", "..") or Path(name).name != name:
+        raise InvalidBookFileName(name)
+    return name
+
+
 def shelf_location(library: Path, details: BookDetails, file_name: str | None) -> Path:
-    if not file_name or file_name in (".", "..") or Path(file_name).name != file_name:
-        raise InvalidBookFileName(file_name)
-    return library / details.technologies[0] / file_name
+    return library / details.technologies[0] / parse_book_file_name(file_name)
 
 
 def file_book(book_file: BookFile, details: BookDetails, library: Path, catalog: Catalog) -> Path:
