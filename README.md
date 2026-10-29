@@ -28,6 +28,10 @@ cp .env.example .env   # fill in BOT_TOKEN, NOTION_TOKEN, NOTION_DATABASE_ID
 - Telegram bot: `uv run bot.py`, then send `/start` and a book file.
 - CLI: `uv run cli.py` files a book from `~/Downloads`.
 
+The bot's messages and genre buttons are in Ukrainian. The CLI's prompts,
+messages, and genre menu are in English. Both keep the existing Ukrainian
+genre values in Notion.
+
 ## Development
 
 `uv sync` installs the dev tools too (pytest, coverage, radon, mutmut, pylint).

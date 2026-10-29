@@ -60,10 +60,10 @@ Author:
 Enter an author.
 Author: Robert C. Martin
 Genres:
-1. Саморозвиток
-2. Технічна література
-3. Історія і мемуари
-4. Бізнес
+1. Self-development
+2. Technical literature
+3. History and memoirs
+4. Business
 Select genre number: 5
 Invalid selection.
 Select genre number: 2
@@ -102,7 +102,21 @@ def test_lists_visible_download_files_and_genres_by_number(monkeypatch, capsys, 
     out = capsys.readouterr().out
     assert out.startswith("Available files in Downloads:\n1. a.pdf\n2. b.pdf\nSelect file number: 1\n"
                           "Book title: Clean Code\nAuthor: Robert C. Martin\nGenres:\n"
-                          "1. Саморозвиток\n2. Технічна література\n3. Історія і мемуари\n4. Бізнес\n")
+                          "1. Self-development\n2. Technical literature\n"
+                          "3. History and memoirs\n4. Business\n")
+
+
+@pytest.mark.parametrize("number, genre", list(enumerate(Genre, 1)))
+def test_english_genre_selection_preserves_the_catalog_genre(
+        monkeypatch, capsys, downloads, library, number, genre):
+    answer(monkeypatch, ["1", "Clean Code", "Robert C. Martin", str(number), "#Go", "1"])
+    catalog = RecordingCatalog()
+
+    file_from_downloads(downloads, library, catalog)
+
+    assert catalog.entries[0].details.genre is genre
+    assert "Genres:\n1. Self-development\n2. Technical literature\n" \
+           "3. History and memoirs\n4. Business\n" in capsys.readouterr().out
 
 
 def test_says_so_when_downloads_is_empty(monkeypatch, capsys, tmp_path, library):

@@ -106,6 +106,15 @@ def test_files_a_sent_book_and_offers_to_add_another(library):
     assert location.read_bytes() == b"pages"
     assert catalog.entries == [CatalogEntry(BookDetails(
         "Clean Code", "Robert C. Martin", Genre.TECHNICAL, ("Python", "AI"), 464), location)]
+    assert chat.replies[:-1] == [
+        "Надішли файл книги 📚",
+        "⏳ Обробка книги…",
+        "📖 Як називається книга?",
+        "👤 Хто автор?",
+        "📚 Обери жанр книги:",
+        "💡 Вкажи технології через хештеги (наприклад: #Python #AI)",
+        "📄 Скільки сторінок у книзі?",
+    ]
     assert chat.replies[-1] == (f"✅ Книгу збережено в: <code>{library}/Python/R&amp;D.pdf</code>\n"
                                 "І додано в базу Notion! 🎉")
     buttons = chat.markups[-1].inline_keyboard[0]
@@ -165,6 +174,19 @@ def test_waits_for_another_file_when_this_one_cannot_be_used(library, files, nam
     asyncio.run(send_file())
 
     assert chat.replies[-1] == warning
+    assert asyncio.run(chat.state.get_state()) == BookUpload.waiting_for_file.state
+
+
+def test_asks_for_a_missing_file_in_ukrainian(library):
+    chat = chat_with(library)
+
+    async def send_without_file():
+        await chat.start()
+        await chat.send()
+
+    asyncio.run(send_without_file())
+
+    assert chat.replies[-1] == "⚠️ Не вдалося отримати файл. Спробуй ще раз."
     assert asyncio.run(chat.state.get_state()) == BookUpload.waiting_for_file.state
 
 

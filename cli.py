@@ -14,6 +14,12 @@ from notion_catalog import NotionCatalog
 from settings import MissingSetting, load_settings
 
 DOWNLOADS_PATH = Path.home() / "Downloads"
+GENRE_LABELS = {
+    Genre.SELF_DEVELOPMENT: "Self-development",
+    Genre.TECHNICAL: "Technical literature",
+    Genre.HISTORY_AND_MEMOIRS: "History and memoirs",
+    Genre.BUSINESS: "Business",
+}
 
 
 def list_download_files(downloads):
@@ -45,7 +51,7 @@ def ask_book_details():
     genres = list(Genre)
     print("Genres:")
     for idx, g in enumerate(genres, 1):
-        print(f"{idx}. {g.value}")
+        print(f"{idx}. {GENRE_LABELS[g]}")
     genre = choose("Select genre number: ", genres)
     technologies = ask("Technologies (hashtags, e.g. #Python #AI): ",
                        parse_technologies, "Enter at least one hashtag.")
