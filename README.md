@@ -14,9 +14,10 @@ changed. Terms are defined in [GLOSSARY.md](GLOSSARY.md).
 
 ## Setup
 
+Install [uv](https://docs.astral.sh/uv/), then:
+
 ```sh
-python -m venv .venv
-.venv/bin/pip install -r requirements.txt
+uv sync
 cp .env.example .env   # fill in BOT_TOKEN, NOTION_TOKEN, NOTION_DATABASE_ID
 ```
 
@@ -24,12 +25,16 @@ cp .env.example .env   # fill in BOT_TOKEN, NOTION_TOKEN, NOTION_DATABASE_ID
 
 ## Usage
 
-- Telegram bot: `.venv/bin/python bot.py`, then send `/start` and a book file.
-- CLI: `.venv/bin/python cli.py` files a book from `~/Downloads`.
+- Telegram bot: `uv run bot.py`, then send `/start` and a book file.
+- CLI: `uv run cli.py` files a book from `~/Downloads`.
 
 ## Development
 
+`uv sync` installs the dev tools too (pytest, coverage, radon, mutmut, pylint).
+
 ```sh
-.venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest
+uv run pytest
 ```
+
+Add dependencies with `uv add <package>` (or `uv add --dev <package>`);
+commit both `pyproject.toml` and `uv.lock`.
