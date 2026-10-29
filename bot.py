@@ -1,33 +1,43 @@
 import asyncio
-import os
-import re
+import html
 import logging
-from aiogram import Bot, Dispatcher, types, F
+import os
+
+from aiogram import Bot, Dispatcher, F, types
+from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-import aiofiles
-from dotenv import load_dotenv
-from notion_client_wrapper import NotionClientWrapper
-from aiogram.client.default import DefaultBotProperties
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+from filing import (
+    BookAlreadyOnShelf,
+    BookDetails,
+    Genre,
+    InvalidBookDetails,
+    InvalidBookFileName,
+    ReceivedBookFile,
+    file_book,
+    parse_book_file_name,
+    parse_genre,
+    parse_page_count,
+    parse_technologies,
+    parse_text,
+)
+from notion_catalog import NotionCatalog
+from settings import load_settings
 
 logging.basicConfig(level=logging.INFO)
 
-load_dotenv()
-
+settings = load_settings()
 BOT_TOKEN = os.getenv("BOT_TOKEN") or ""
-NOTION_TOKEN = os.getenv("NOTION_TOKEN") or ""
-NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID") or ""
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(
     parse_mode=ParseMode.HTML))
 dp = Dispatcher(storage=MemoryStorage())
-notion = NotionClientWrapper(NOTION_TOKEN, NOTION_DATABASE_ID)
-
-BOOKS_BASE_PATH = "/Users/olexandrpylypyshyn/Documents/Books"
+catalog = NotionCatalog.connect(settings.notion_token, settings.notion_database_id)
 
 # FSM
 
@@ -62,7 +72,12 @@ async def handle_file(message: types.Message, state: FSMContext):
         await message.answer("⚠️ Не вдалося отримати файл. Спробуй ще раз.")
         return
 
-    file_name = file.file_name
+    try:
+        file_name = parse_book_file_name(file.file_name)
+    except InvalidBookFileName:
+        await message.answer("⚠️ У файлу некоректна назва. Перейменуй його і надішли ще раз.")
+        return
+
     file_obj = await bot.get_file(file.file_id)
 
     if not file_obj.file_path:
@@ -71,7 +86,11 @@ async def handle_file(message: types.Message, state: FSMContext):
 
     file_data = await bot.download_file(file_obj.file_path)
 
-    await state.update_data(file_name=file_name, file_data=file_data)
+    if file_data is None:
+        await message.answer("⚠️ Не вдалося завантажити файл. Спробуй ще раз.")
+        return
+
+    await state.update_data(file_name=file_name, file_content=file_data.read())
     await state.set_state(BookUpload.waiting_for_title)
     await message.answer("📖 Як називається книга?")
 
@@ -80,7 +99,13 @@ async def handle_file(message: types.Message, state: FSMContext):
 
 @dp.message(BookUpload.waiting_for_title)
 async def process_title(message: types.Message, state: FSMContext):
-    await state.update_data(title=message.text)
+    try:
+        title = parse_text(message.text)
+    except InvalidBookDetails:
+        await message.answer("⚠️ Назва не може бути порожньою. Спробуй ще раз.")
+        return
+
+    await state.update_data(title=title)
     await state.set_state(BookUpload.waiting_for_author)
     await message.answer("👤 Хто автор?")
 
@@ -89,16 +114,18 @@ async def process_title(message: types.Message, state: FSMContext):
 
 @dp.message(BookUpload.waiting_for_author)
 async def handle_author(message: types.Message, state: FSMContext):
-    await state.update_data(author=message.text)
+    try:
+        author = parse_text(message.text)
+    except InvalidBookDetails:
+        await message.answer("⚠️ Автор не може бути порожнім. Спробуй ще раз.")
+        return
+
+    await state.update_data(author=author)
     await state.set_state(BookUpload.waiting_for_genre)
 
+    genres = [types.KeyboardButton(text=g.value) for g in Genre]
     keyboard = types.ReplyKeyboardMarkup(
-        keyboard=[
-            [types.KeyboardButton(text="Саморозвиток"),
-             types.KeyboardButton(text="Технічна література")],
-            [types.KeyboardButton(text="Історія і мемуари"),
-             types.KeyboardButton(text="Бізнес")]
-        ],
+        keyboard=[genres[i:i + 2] for i in range(0, len(genres), 2)],
         resize_keyboard=True
     )
 
@@ -109,13 +136,9 @@ async def handle_author(message: types.Message, state: FSMContext):
 
 @dp.message(BookUpload.waiting_for_genre)
 async def handle_genre(message: types.Message, state: FSMContext):
-    if not message.text:
-        await message.answer("⚠️ Повідомлення не може бути порожнім. Спробуй ще раз.")
-        return
-
-    genre = message.text.strip()
-
-    if genre not in ["Саморозвиток", "Технічна література", "Історія і мемуари", "Бізнес"]:
+    try:
+        genre = parse_genre(message.text)
+    except InvalidBookDetails:
         await message.answer("⚠️ Вибери жанр з клавіатури")
         return
 
@@ -128,13 +151,13 @@ async def handle_genre(message: types.Message, state: FSMContext):
 
 @dp.message(BookUpload.waiting_for_technologies)
 async def handle_technologies(message: types.Message, state: FSMContext):
-    hashtags = re.findall(r"#(\w+)", message.text or "")
-
-    if not hashtags:
+    try:
+        technologies = parse_technologies(message.text)
+    except InvalidBookDetails:
         await message.answer("⚠️ Введи хоча б один хештег")
         return
 
-    await state.update_data(technologies=hashtags)
+    await state.update_data(technologies=technologies)
     await state.set_state(BookUpload.waiting_for_page_count)
     await message.answer("📄 Скільки сторінок у книзі?")
 
@@ -154,45 +177,30 @@ def get_post_process_keyboard():
 @dp.message(BookUpload.waiting_for_page_count)
 async def handle_page_count(message: types.Message, state: FSMContext):
     try:
-        if not message.text:
-            await message.answer("⚠️ Повідомлення не може бути порожнім. Спробуй ще раз.")
-            return
-
-        page_count = int(message.text.strip())
-    except ValueError:
-        await message.answer("⚠️ Введи ціле число сторінок")
+        page_count = parse_page_count(message.text)
+    except InvalidBookDetails:
+        await message.answer("⚠️ Введи додатне ціле число сторінок")
         return
 
     data = await state.get_data()
-    file_name = data["file_name"]
-    file_data = data["file_data"]
-    title = data["title"]
-    author = data["author"]
-    genre = data["genre"]
-    technologies = data["technologies"]
-    first_tag = technologies[0]
-    pages = page_count
-
-    folder_path = os.path.join(BOOKS_BASE_PATH, first_tag)
-    os.makedirs(folder_path, exist_ok=True)
-    file_path = os.path.join(folder_path, file_name)
-
-    async with aiofiles.open(file_path, "wb") as f:
-        await f.write(file_data.read())
-
-    notion.add_file_entry(
-        title=title,
-        author=author,
-        genre=genre,
-        technologies=technologies,
-        pages=pages,
-        file_path=file_path
-    )
-
-    await message.answer(f"✅ Книгу збережено в: <code>{file_path}</code>\n"
-                         f"І додано в базу Notion! 🎉",
-                         reply_markup=get_post_process_keyboard())
     await state.clear()
+    details = BookDetails(data["title"], data["author"], data["genre"],
+                          data["technologies"], page_count)
+    book_file = ReceivedBookFile(data["file_name"], data["file_content"])
+
+    try:
+        location = await asyncio.to_thread(
+            file_book, book_file, details, settings.library, catalog)
+    except BookAlreadyOnShelf as e:
+        reply = f"⚠️ Книга вже є в <code>{html.escape(str(e.location))}</code>. Нічого не змінено."
+    except Exception:
+        logging.exception("Filing failed")
+        reply = "⚠️ Не вдалося зберегти книгу. Нічого не змінено, спробуй ще раз."
+    else:
+        reply = (f"✅ Книгу збережено в: <code>{html.escape(str(location))}</code>\n"
+                 f"І додано в базу Notion! 🎉")
+
+    await message.answer(reply, reply_markup=get_post_process_keyboard())
 
 
 @dp.callback_query(F.data == "add_another")

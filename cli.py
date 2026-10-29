@@ -1,85 +1,85 @@
-import os
-import re
-import shutil
-from notion_client_wrapper import NotionClientWrapper
-from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()
+from filing import (
+    BookAlreadyOnShelf,
+    BookDetails,
+    DownloadedBookFile,
+    Genre,
+    file_book,
+    parse_page_count,
+    parse_technologies,
+    parse_text,
+)
+from notion_catalog import NotionCatalog
+from settings import MissingSetting, load_settings
 
-NOTION_TOKEN = os.getenv("NOTION_TOKEN") or ""
-NOTION_DATABASE_ID = os.getenv("NOTION_DATABASE_ID") or ""
-
-BOOKS_BASE_PATH = "/Users/olexandrpylypyshyn/Documents/Books"
-DOWNLOADS_PATH = "/Users/olexandrpylypyshyn/Downloads/"
-
-notion = NotionClientWrapper(NOTION_TOKEN, NOTION_DATABASE_ID)
+DOWNLOADS_PATH = Path.home() / "Downloads"
 
 
 def list_download_files():
-    files = [f for f in os.listdir(DOWNLOADS_PATH)
-             if os.path.isfile(os.path.join(DOWNLOADS_PATH, f)) and not f.startswith('.')]
-    return files
+    return sorted(p for p in DOWNLOADS_PATH.iterdir()
+                  if p.is_file() and not p.name.startswith("."))
 
 
-def prompt_input(prompt, validator=None, error_msg=None):
+def ask(prompt, parse, error_msg):
     while True:
-        value = input(prompt)
-        if validator:
-            if validator(value):
-                return value
-            else:
-                if error_msg:
-                    print(error_msg)
-        else:
-            return value
+        try:
+            return parse(input(prompt))
+        except ValueError:
+            print(error_msg)
+
+
+def choose(prompt, options):
+    def parse(text):
+        text = text.strip()
+        if not (text.isdigit() and 1 <= int(text) <= len(options)):
+            raise ValueError(text)
+        return options[int(text) - 1]
+
+    return ask(prompt, parse, "Invalid selection.")
+
+
+def ask_book_details():
+    title = ask("Book title: ", parse_text, "Enter a title.")
+    author = ask("Author: ", parse_text, "Enter an author.")
+    genres = list(Genre)
+    print("Genres:")
+    for idx, g in enumerate(genres, 1):
+        print(f"{idx}. {g.value}")
+    genre = choose("Select genre number: ", genres)
+    technologies = ask("Technologies (hashtags, e.g. #Python #AI): ",
+                       parse_technologies, "Enter at least one hashtag.")
+    pages = ask("Page count: ", parse_page_count, "Enter a positive whole number.")
+    return BookDetails(title, author, genre, technologies, pages)
 
 
 def main():
-    print("Available files in Downloads:")
+    try:
+        settings = load_settings()
+    except MissingSetting as e:
+        print(f"⚠️ {e}")
+        return
+
     files = list_download_files()
-    for idx, f in enumerate(files):
-        print(f"{idx+1}. {f}")
     if not files:
         print("No files found in Downloads.")
         return
-    file_idx = int(prompt_input("Select file number: ", lambda x: x.isdigit(
-    ) and 1 <= int(x) <= len(files), "Invalid selection.")) - 1
-    file_name = files[file_idx]
-    file_path = os.path.join(DOWNLOADS_PATH, file_name)
+    print("Available files in Downloads:")
+    for idx, f in enumerate(files, 1):
+        print(f"{idx}. {f.name}")
+    book_file = DownloadedBookFile(choose("Select file number: ", files))
+    details = ask_book_details()
 
-    title = prompt_input("Book title: ")
-    author = prompt_input("Author: ")
-    genres = ["Саморозвиток", "Технічна література",
-              "Історія і мемуари", "Бізнес"]
-    print("Genres:")
-    for idx, g in enumerate(genres):
-        print(f"{idx+1}. {g}")
-    genre_idx = int(prompt_input("Select genre number: ", lambda x: x.isdigit(
-    ) and 1 <= int(x) <= len(genres), "Invalid selection.")) - 1
-    genre = genres[genre_idx]
-    techs = prompt_input("Technologies (hashtags, e.g. #Python #AI): ",
-                         lambda x: bool(re.findall(r"#(\w+)", x)),
-                         "Enter at least one hashtag.")
-    technologies = re.findall(r"#(\w+)", techs)
-    pages = int(prompt_input("Page count: ",
-                lambda x: x.isdigit(), "Enter a number."))
-
-    first_tag = technologies[0]
-    dest_folder = os.path.join(BOOKS_BASE_PATH, first_tag)
-    os.makedirs(dest_folder, exist_ok=True)
-    dest_path = os.path.join(dest_folder, file_name)
-    shutil.move(file_path, dest_path)
-
-    notion.add_file_entry(
-        title=title,
-        author=author,
-        genre=genre,
-        technologies=technologies,
-        pages=pages,
-        file_path=dest_path
-    )
-    print(f"✅ Book saved to: {dest_path} and added to Notion.")
-    print(f"🗑️ Deleted original file from Downloads.")
+    catalog = NotionCatalog.connect(settings.notion_token, settings.notion_database_id)
+    try:
+        location = file_book(book_file, details, settings.library, catalog)
+    except BookAlreadyOnShelf as e:
+        print(f"⚠️ {e.location} already exists; nothing was changed.")
+        return
+    except Exception as e:
+        print(f"⚠️ Could not file the book ({e}); it is still in Downloads.")
+        return
+    print(f"✅ Book moved from Downloads to {location} and added to Notion.")
 
 
 if __name__ == "__main__":
