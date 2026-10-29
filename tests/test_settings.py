@@ -15,6 +15,13 @@ def test_reads_catalog_settings_and_defaults_the_library_to_documents_books():
     assert settings.library == Path.home() / "Documents" / "Books"
 
 
+def test_reads_the_process_environment_by_default(monkeypatch, tmp_path):
+    for name, value in (REQUIRED | {"BOOKO_LIBRARY": str(tmp_path)}).items():
+        monkeypatch.setenv(name, value)
+
+    assert load_settings() == load_settings(REQUIRED | {"BOOKO_LIBRARY": str(tmp_path)})
+
+
 def test_library_can_be_moved_with_booko_library(tmp_path):
     settings = load_settings(REQUIRED | {"BOOKO_LIBRARY": str(tmp_path)})
 

@@ -64,6 +64,9 @@ class TestBookDetails:
         assert details.technologies == ("Python", "AI")
         assert details.page_count == 464
 
+    def test_a_single_page_is_enough(self):
+        assert clean_code(page_count=1).page_count == 1
+
     @pytest.mark.parametrize("overrides", [
         {"title": " "},
         {"author": ""},

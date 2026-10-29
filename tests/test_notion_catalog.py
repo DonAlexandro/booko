@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from notion_client import Client
+
 from samples import clean_code
 from filing import CatalogEntry
 from notion_catalog import NotionCatalog
@@ -40,3 +42,11 @@ def test_adds_one_notion_page_per_catalog_entry():
             "Тип": {"select": {"name": "Електронна копія"}},
         },
     }]
+
+
+def test_connects_to_the_catalog_database_with_a_notion_client():
+    catalog = NotionCatalog.connect("secret", "catalog-id")
+
+    assert isinstance(catalog.client, Client)
+    assert catalog.client.options.auth == "secret"
+    assert catalog.database_id == "catalog-id"

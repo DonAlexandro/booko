@@ -38,7 +38,7 @@ class FakeTelegram:
         return None if content is None else BytesIO(content)
 
     async def send_message(self, chat_id, text):
-        self.sent.append(text)
+        self.sent.append((chat_id, text))
 
 
 class Chat:
@@ -59,9 +59,8 @@ class Chat:
 
     async def call(self, handler, event):
         wanted = inspect.signature(handler).parameters
-        kwargs = {k: v for k, v in self.injected.items() if k in wanted}
-        await handler(event, state=self.state, **kwargs) if "state" in wanted else (
-            await handler(event, **kwargs))
+        available = self.injected | {"state": self.state}
+        await handler(event, **{k: v for k, v in available.items() if k in wanted})
 
     async def start(self):
         await self.call(bot.start_handler, self.message("/start"))
@@ -110,7 +109,8 @@ def test_files_a_sent_book_and_offers_to_add_another(library):
     assert chat.replies[-1] == (f"✅ Книгу збережено в: <code>{library}/Python/R&amp;D.pdf</code>\n"
                                 "І додано в базу Notion! 🎉")
     buttons = chat.markups[-1].inline_keyboard[0]
-    assert [b.callback_data for b in buttons] == ["add_another", "finish"]
+    assert [(b.text, b.callback_data) for b in buttons] == [
+        ("📚 Додати ще 1 книгу", "add_another"), ("✅ Завершити", "finish")]
     assert asyncio.run(chat.state.get_state()) is None
 
 
@@ -198,8 +198,9 @@ def test_add_another_waits_for_the_next_book_file(library, in_chat):
 
     asyncio.run(chat.press("add_another", in_chat))
 
+    assert all(chat_id == 1 for chat_id, _ in chat.injected["bot"].sent)
     assert asyncio.run(chat.state.get_state()) == BookUpload.waiting_for_file.state
-    replies = chat.replies if in_chat else chat.injected["bot"].sent
+    replies = chat.replies if in_chat else [text for _, text in chat.injected["bot"].sent]
     assert replies == ["📥 Надішли файл нової книги"]
 
 
@@ -209,6 +210,6 @@ def test_finish_says_goodbye(library, in_chat):
 
     asyncio.run(chat.press("finish", in_chat))
 
-    replies = chat.replies if in_chat else chat.injected["bot"].sent
+    replies = chat.replies if in_chat else [text for _, text in chat.injected["bot"].sent]
     assert replies == [
         "🔚 Ти завжди можеш додати більше книг пізніше — просто надішли мені команду /start."]
