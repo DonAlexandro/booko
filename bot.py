@@ -2,6 +2,7 @@ import asyncio
 import html
 import logging
 import os
+from pathlib import Path
 
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.client.default import DefaultBotProperties
@@ -15,6 +16,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from filing import (
     BookAlreadyOnShelf,
     BookDetails,
+    Catalog,
     Genre,
     InvalidBookDetails,
     InvalidBookFileName,
@@ -31,13 +33,7 @@ from settings import load_settings
 
 logging.basicConfig(level=logging.INFO)
 
-settings = load_settings()
-BOT_TOKEN = os.getenv("BOT_TOKEN") or ""
-
-bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(
-    parse_mode=ParseMode.HTML))
 dp = Dispatcher(storage=MemoryStorage())
-catalog = NotionCatalog.connect(settings.notion_token, settings.notion_database_id)
 
 # FSM
 
@@ -63,7 +59,7 @@ async def start_handler(message: types.Message, state: FSMContext):
 
 
 @dp.message(BookUpload.waiting_for_file, F.document)
-async def handle_file(message: types.Message, state: FSMContext):
+async def handle_file(message: types.Message, state: FSMContext, bot: Bot):
     await message.answer("⏳ Обробка книги…")
 
     file = message.document
@@ -175,7 +171,8 @@ def get_post_process_keyboard():
 
 
 @dp.message(BookUpload.waiting_for_page_count)
-async def handle_page_count(message: types.Message, state: FSMContext):
+async def handle_page_count(message: types.Message, state: FSMContext,
+                            library: Path, catalog: Catalog):
     try:
         page_count = parse_page_count(message.text)
     except InvalidBookDetails:
@@ -190,7 +187,7 @@ async def handle_page_count(message: types.Message, state: FSMContext):
 
     try:
         location = await asyncio.to_thread(
-            file_book, book_file, details, settings.library, catalog)
+            file_book, book_file, details, library, catalog)
     except BookAlreadyOnShelf as e:
         reply = f"⚠️ Книга вже є в <code>{html.escape(str(e.location))}</code>. Нічого не змінено."
     except Exception:
@@ -204,7 +201,7 @@ async def handle_page_count(message: types.Message, state: FSMContext):
 
 
 @dp.callback_query(F.data == "add_another")
-async def callback_add_another(callback: types.CallbackQuery, state: FSMContext):
+async def callback_add_another(callback: types.CallbackQuery, state: FSMContext, bot: Bot):
     message = "📥 Надішли файл нової книги"
 
     await state.set_state(BookUpload.waiting_for_file)
@@ -215,7 +212,7 @@ async def callback_add_another(callback: types.CallbackQuery, state: FSMContext)
 
 
 @dp.callback_query(F.data == "finish")
-async def callback_finish(callback: types.CallbackQuery):
+async def callback_finish(callback: types.CallbackQuery, bot: Bot):
     message = "🔚 Ти завжди можеш додати більше книг пізніше — просто надішли мені команду /start."
 
     if callback.message is not None:
@@ -225,7 +222,11 @@ async def callback_finish(callback: types.CallbackQuery):
 
 
 async def main():
-    await dp.start_polling(bot)
+    settings = load_settings()
+    bot = Bot(token=os.getenv("BOT_TOKEN") or "", default=DefaultBotProperties(
+        parse_mode=ParseMode.HTML))
+    catalog = NotionCatalog.connect(settings.notion_token, settings.notion_database_id)
+    await dp.start_polling(bot, library=settings.library, catalog=catalog)
 
 if __name__ == "__main__":
     asyncio.run(main())
