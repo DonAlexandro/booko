@@ -11,11 +11,17 @@ dependencies = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = ["src", "."]
 testpaths = ["tests"]
 
 [tool.mutmut]
-source_paths = ["filing.py", "settings.py", "notion_catalog.py", "cli.py", "bot.py"]
+source_paths = [
+    "src/filing.py",
+    "src/settings.py",
+    "src/notion_catalog.py",
+    "src/cli.py",
+    "src/bot.py",
+]
 pytest_add_cli_args_test_selection = ["tests/"]
 also_copy = ["tests/"]
 
